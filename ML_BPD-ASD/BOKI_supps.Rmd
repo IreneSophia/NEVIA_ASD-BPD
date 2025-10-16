@@ -1,16 +1,21 @@
 ---
 title: "Supplementary materials"
-subtitle: 'It takes two: digitally assisted differential diagnostics of ASD based on dyadic interactions'
+subtitle: 'Highly scalable technology assisted differential diagnostics of ASD'
 author: "I S Plank et al."
 date: "`r Sys.Date()`"
 output: 
   pdf_document:
     toc: true
     number_sections: true
+    latex_engine: xelatex
 fontsize: 10pt
 geometry: margin=0.5in
 bibliography: BOKI_supp.bib
 csl: nature.csl
+header-includes:
+# Add the S before section and table numbers
+- \renewcommand{\thesection}{S\arabic{section}}
+- \renewcommand{\thetable}{S\arabic{table}} 
 ---
 
 ```{r setup, include=FALSE}
@@ -18,7 +23,8 @@ csl: nature.csl
 # clear global environment
 rm(list=ls())
 
-knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(echo = F, fig.pos = "center",
+                      fig.width = 7.5, fig.height = 4)
 
 # load libraries
 ls.packages = c("tidyverse",        # tibble stuff
@@ -30,12 +36,18 @@ ls.packages = c("tidyverse",        # tibble stuff
                 "emmeans",          # group comparisons for anovas
                 "flextable",        # regulartable
                 "officer",          # read_docx
+                "kableExtra",       # more kable settings
                 "english"           # numbers to words
                 )
 lapply(ls.packages, library, character.only=TRUE)
 
 # set colour schemes
 custom.col4 = c("#004D40", "#1E88E5", "#FFC107", "#D81B60", "#5D3A9B", "#E66100")
+
+# set flextable defaults
+#set_flextable_defaults(
+#  font.family = "Helvetica", font.size = 9, 
+#  border.color = "gray", big.mark = "")
 
 # set figure directory
 svm.dir = "./SVM_classifier"
@@ -394,9 +406,7 @@ ggsave(p, filename = file.path(fig.dir, "plotFeatures.png"), width = 12, height 
 
 ```
 
-`r s  = 0`
-
-# `r s = s + 1`S`r s``r ss = 0` Version numbers for R and all packages
+# Version numbers for R and all packages
 
 ```{r lib_versions}
 
@@ -407,7 +417,7 @@ for (package in ls.packages) {
 }
 ```
 
-# `r s = s + 1`S`r s``r ss = 0` Inclusion and exclusion criteria 
+# Inclusion and exclusion criteria 
 
 Inclusion criteria applying to all participants: 
 
@@ -443,7 +453,7 @@ Furthermore, we applied the following exclusion criteria:
 
 Testing was discontinued if participants withdrew their consent, exclusion criteria applied or in the case of technical difficulties. 
 
-# `r s = s + 1`S`r s``r ss = 0` Measures
+# Measures
 
 We collected the following self-report questionnaires: 
 
@@ -464,7 +474,7 @@ For 37 of the dyads, we used a plexiglass screen placed between the interaction 
 * How smooth was the communication between you and your conversation partner?
 * How well did your conversation partner respond to you?
 
-##  `r ss = ss + 1`S`r s`.`r ss` Group comparisons based on diagnostic status
+##  Group comparisons based on diagnostic status
 
 ```{r demo1}
 
@@ -548,7 +558,7 @@ for (f in feats) {
 }
 
 
-kable(df.demo %>%
+kbl(df.demo %>%
         mutate(
           # perform fdr correction
           `BPDvsASD`  = p.adjust(`BPDvsASD`,  method = "BY", n = length(feats)),
@@ -566,7 +576,22 @@ kable(df.demo %>%
           `COMPvsBPD`  = if_else(`COMPvsBPD` < 0.05, 
                                sprintf("%.3f*",`COMPvsBPD`),
                                sprintf("%.3f", `COMPvsBPD`)),
-        ) %>% arrange(measurement))
+        ) %>% 
+          rename('BPD vs. ASD' = 'BPDvsASD',
+                 'COMP vs. ASD' = 'COMPvsASD',
+                 'COMP vs. BPD' = 'COMPvsBPD') %>%
+          arrange(measurement), caption = "Group comparisons",
+      booktabs = T, linesep = '') %>%
+  kable_styling(font_size = 9)  %>%
+  column_spec(1, width = "0.75in") %>%
+  column_spec(2, width = "1.4in") %>%
+  column_spec(3, width = "1.4in") %>%
+  column_spec(4, width = "1.4in") %>%
+  column_spec(5, width = "0.5in") %>%
+  column_spec(6, width = "0.5in") %>%
+  column_spec(7, width = "0.5in")
+  
+  
 
 ```
 
@@ -585,9 +610,9 @@ ct.gen
 ```
 
 
-# `r s = s + 1`S`r s``r ss = 0` Features 
+#  Features 
 
-##  `r ss = ss + 1`S`r s`.`r ss` Facial expressions extracted from OpenFace
+##  Facial expressions extracted from OpenFace
 
 We only included data of participants with a mean confidence of tracked frames greater than 75% and more than 90% successfully tracked frames. Facial expressions were captured as action units. We did not extract emotional expressions from these facial expressions as coherence between facial expressions and emotions is not a given and might be even less so for autistic people [@costa_expressive_2017]. 
 
@@ -623,7 +648,7 @@ Furthermore, we used translational head position parameters to infer head motion
 $$\text{head movement} = \sqrt{\Delta_t x^2 + \Delta_t y^2 + \Delta_t z^2}$$
 
 
-##  `r ss = ss + 1`S`r s`.`r ss` Motion quantity extracted using Motion Energy Analysis
+##  Motion quantity extracted using Motion Energy Analysis
 
 This figure shows body (red and purple) and head (yellow and orange) regions of interests of each interaction partner separately:
 
@@ -633,7 +658,7 @@ There was always a space between the head and body region. Regions were chosen s
 
 In addition to using the motion quantity to compute synchronisation, we also extracted total movement in each region of interest for each interaction partner to be included in the *MovEx* model. 
 
-##  `r ss = ss + 1`S`r s`.`r ss` Speech and turn-taking features
+##  Speech and turn-taking features
 
 We extracted pitch using praat's autocorrelation method, a technique widely recognized for its reliability and accuracy [@praat]. We implemented a two-step pitch extraction method, as outlined by Hirst [@hirst_analysis_2011]. First, to capture a broad range of frequencies, we set a low pitch floor of 50 Hz and a high pitch ceiling of 700 Hz, with a time step of 15 ms. All other parameters were set to Praat's default values. Second, using these initial pitch values, we determined the first and third quartiles of pitch for each participant and task. We then used these quartiles to compute individual pitch floors and ceilings with the following algorithm:
 
@@ -655,14 +680,14 @@ In the case of turn-based synchronization, we correlated the median pitch or int
 
 Next, we used the uhm-o-meter [@de_jong_uhm-o-meter_2021; @de_jong_praat_2021] to differentiate between periods of speaking and silence, identify syllables and extract several prosodic features (total number of syllables, total number of silent phases, duration of speaking as phonation time, speech rate as number of syllables per second, articulation rate as number of syllables per phonation time, average syllable duration and silence-to-turn ratio). The resulting speaking and silent instances were visually and aurally inspected to verify the accuracy of the algorithm.  
 
-##  `r ss = ss + 1`S`r s`.`r ss` Cross-modal features
+##  Cross-modal features
 
 We captured two types of cross-modal features: 
 
 * Interpersonal synchronisation of one person's head with the other person's body movement and vice versa
 * AU activation, body and head movement during listening and speaking
 
-##  `r ss = ss + 1`S`r s`.`r ss` Synchrony computations
+##  Synchrony computations
 
 We used the following settings for our windowed lagged cross-correlation (WLCC): 
 
@@ -676,13 +701,15 @@ window = c(7, 30, 30, 30, 16, 16)
 step   = c(4, 15, 15, 15,  8,  8)
 lag    = c(2,  5,  5,  5,  2,  2)
 
-kable(data.frame(measure, window, step, lag), caption = "WLCC settings in seconds")
+kbl(data.frame(measure, window, step, lag), caption = "WLCC settings in seconds",
+      booktabs = T, linesep = '', longtable = T) %>%
+  kable_styling(font_size = 9) 
 
 ```
 
 For each window, the maximum correlation value was chosen out of all relevant lags (peack-picking). We cross-correlated head movements (from OpenFace) with body motion energy time series (from MEA) to estimate intrapersonal synchrony. 
 
-##  `r ss = ss + 1`S`r s`.`r ss` Feature lists 
+##  Feature lists 
 
 This list shows all features without the information of conversation, i.e., each of these features was added twice to the model, once from the mealplanning and once from the hobbies conversation. The number of features per model is displayed as well. For many of the extracted features, we calculated summary scores some which are indicated by abbreviations (mean, md = median, sd = standard deviation, min = minimum, max = maximum, ske = skewness and kurtosis)
 
@@ -707,23 +734,30 @@ df.feat.m = df.lng %>%
   group_by(model) %>%
   summarise(
     features = paste(feature, collapse = ", "),
-    "no of features" = n() * 2
-  )
+    x = n() * 2
+  ) %>%
+  mutate(
+    model = paste0(model, sprintf(' (%d features)', x))
+  ) %>% select(-x)
 
-kable(df.feat.m)
+kbl(df.feat.m, booktabs = T, linesep = "\\addlinespace", longtable = T,
+    caption = "List of all mealplanning features of the base models") %>%
+  kable_styling(font_size = 8) %>%
+  column_spec(1, width = "1in", bold = T) %>%
+  column_spec(2, width = "6in")
 
 ```
 
-# `r s = s + 1`S`r s``r ss = 0` Model performance
+#  Model performance
 
-## `r ss = ss + 1`S`r s`.`r ss` Distinguishing BPD-involved from COMP interactions
+## Distinguishing BPD-involved from COMP interactions
 While developing an algorithm for technology-assisted diagnostics of BPD was not the explicit goal of this research project, we explored the application of our features to the classification between BPD-involved and COMP interactions. Despite the features being chosen with symptoms and characteristics of ASD in mind, the *CROSSturn*, *FACEsync*, *HEADsync* and *Speech* models performed above chance in this comparison (*BODYsync*: *p~FDR~* = `r round(df.nm[df.nm$model == "BODYsync" & df.nm$comparison == "BPD-COMP vs COMP-COMP",]$"p.fdr",3)`; *CROSSsync*: *p~FDR~* = `r round(df.nm[df.nm$model == "CROSSsync" & df.nm$comparison == "BPD-COMP vs COMP-COMP",]$"p.fdr",3)`; *INTRAsync*: *p~FDR~* = `r round(df.nm[df.nm$model == "INTRAsync" & df.nm$comparison == "BPD-COMP vs COMP-COMP",]$"p.fdr",3)`; *MovEx*: *p~FDR~* = `r round(df.nm[df.nm$model == "MovEx" & df.nm$comparison == "BPD-COMP vs COMP-COMP",]$"p.fdr",3)`). Specifically, the *HEADsync* model achieved `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "HEADsync",]$BAC,1)`% balanced accuracy (`r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "HEADsync",]$sens,1)`; `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "HEADsync",]$spec,1)`% specificity), the *FACEsync* `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "FACEsync",]$BAC,1)`% (`r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "FACEsync",]$sens,1)`; `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "HEADsync",]$spec,1)`% specificity), the *Speech* `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "Speech",]$BAC,1)`% (`r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "Speech",]$sens,1)`; `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "Speech",]$spec,1)`% specificity) and the *CROSSturn* `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "CROSSturn",]$BAC,1)`% (`r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "CROSSturn",]$sens,1)`; `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "CROSSturn",]$spec,1)`% specificity). The stacking model performed comparable to the *HEADsync* and the *MovEx* model but outperformed the other base models (see [!T]), reaching `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "STACK",]$BAC,1)`% balanced accuracy (`r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "STACK",]$sens,1)`; `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "STACK",]$spec,1)`% specificity). Thus, the stacking model only misclassified `r int2words(sum(df.pred2$group == "BPD-involved, misclassified"))` BPD-involved interactions as COMP, but `r int2words(sum(df.pred2$group == "COMP, misclassified"))` COMP interactions were labelled as BPD-involved. 
 
-##  `r ss = ss + 1`S`r s`.`r ss` One-verus-One comparisons
+##  One-verus-One comparisons
 
 ```{r tbl_ovo}
 
-kable(
+kbl(
   merge(
     df.t %>% select(comparison, model, sens, spec, BAC, AUC),
     df.nm %>% select(comparison, model, "p.fdr")
@@ -731,12 +765,13 @@ kable(
     mutate(
       sig = if_else(`p.fdr` < 0.05, "*", "")
     ),
-  digits = 3
-)
+  digits = 3, booktabs = T, longtable = T, linesep = "",
+    caption = "Performance of all the models in One-versus-One comparisons") %>%
+  kable_styling(font_size = 9) 
 
 ```
 
-##  `r ss = ss + 1`S`r s`.`r ss` Multi-group comparisons
+##  Multi-group comparisons
 
 ```{r tbl_multi}
 
@@ -746,12 +781,13 @@ kable(
     mutate(
       sig = if_else(p.fdr < 0.05, "*", "")
     ),
-  digits = 3
-)
+  digits = 3, booktabs = T, longtable = T, linesep = "",
+    caption = "Performance of all the models in Multi-group comparisons") %>%
+  kable_styling(font_size = 9) 
 
 ```
 
-##  `r ss = ss + 1`S`r s`.`r ss` Gender comparisons
+##  Gender comparisons
 
 Did the models perform better for one gender than the other? We perform unpaired Wilcoxon tests for the labels and models separately. 
 
@@ -803,16 +839,17 @@ ggplot(df.gen, aes(x = label, y = Mean_Score)) +
   theme_bw() + 
   facet_wrap(. ~ comp, scales = "free_x") +
   theme(legend.position = "none", plot.title = element_text(hjust = 0.5), #element_blank(), 
-        legend.direction = "horizontal", text = element_text(size = 10),
+        legend.direction = "horizontal", 
+        text = element_text(size = 10),
         legend.title = element_blank(), legend.margin=margin(t=-15))
 
 ```
 
-# `r s = s + 1`S`r s``r ss = 0` Model visualisations
+#  Model visualisations
 
 The following figures were created inspired by NeuroMiner [@koutsouleris_neurominer_2024] visualisations and show the sign-based consistency [@gomez2019sign] as well as the feature weights of the models distinguishing between interaction partners from ASD- and BPD-involved interactions. For models with a large number of features, the top 16 features are plotted. 
 
-##  `r ss = ss + 1`S`r s`.`r ss` ASD-involved versus BPD-involved classifiers
+##  ASD-involved versus BPD-involved classifiers
 
 ```{r plot_ASDvBPD, warning=F}
 
@@ -876,7 +913,7 @@ for (i in 1:length(unique(df.feat$model))) {
 ```
 
 
-##  `r ss = ss + 1`S`r s`.`r ss` ASD-involved versus COMP classifiers
+##  ASD-involved versus COMP classifiers
 
 ```{r plot_ASDvCOMP}
 
@@ -939,7 +976,7 @@ for (i in 1:length(unique(df.feat$model))) {
 ```
 
 
-##  `r ss = ss + 1`S`r s`.`r ss` ASD-involved versus COMP classifiers
+##  ASD-involved versus COMP classifiers
 
 ```{r plot_BPDvCOMP}
 
@@ -1002,7 +1039,7 @@ for (i in 1:length(unique(df.feat$model))) {
 ```
 
 
-# `r s = s + 1`S`r s``r ss = 0` References
+#  References
 
 <div id="refs"></div>
 
