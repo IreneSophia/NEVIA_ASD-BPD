@@ -1,0 +1,10 @@
+Row,BODYsync_MultiClass,CROSSsync_MultiClass,CROSSturn_MultiClass,FACEsync_MultiClass,HEADsync_MultiClass,INTRAsync_MultiClass,MovEx_MultiClass,Speech_MultiClass,STACK_MultiClass
+BODYsync_MultiClass,0,1,1,1,1,0,1,1,1
+CROSSsync_MultiClass,1,0,0,0,1,1,1,1,1
+CROSSturn_MultiClass,1,0,0,0,0,1,1,1,1
+FACEsync_MultiClass,1,0,0,0,1,1,0,1,1
+HEADsync_MultiClass,1,1,0,1,0,1,1,1,1
+INTRAsync_MultiClass,0,1,1,1,1,0,1,1,1
+MovEx_MultiClass,1,1,1,0,1,1,0,0,0
+Speech_MultiClass,1,1,1,1,1,1,0,0,0
+STACK_MultiClass,1,1,1,1,1,1,0,0,0

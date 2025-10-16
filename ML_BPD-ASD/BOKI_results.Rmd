@@ -1,0 +1,111 @@
+---
+title: "BOKI results"
+author: "I S Plank"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = F)
+
+# load the data
+load("BOKI_supps.RData")
+
+# load the list of packages
+lapply(ls.packages, library, character.only=TRUE)
+
+# aggregate the feature information
+df.agg = df.feat.sel %>%
+  mutate(
+    comb = paste(label, ilabel)
+  ) %>%
+  group_by(model, feature, comb) %>%
+  summarise(
+    md    = median(value),
+    lower = quantile(value, probs = 0.25, names = F),
+    upper = quantile(value, probs = 0.75, names = F)
+  )
+
+# function to change small numbers
+int2words = function(x) {
+  if (x <= 12) {
+    x = as.english(x)
+  }
+  as.character(x)
+} 
+
+# check which have the adaptation pattern
+df.feat.comp.sel = df.feat.comp %>%
+  select(feature, comparison, sig) %>%
+  pivot_wider(names_from = comparison, values_from = sig) %>%
+  select(contains("COMP-") | starts_with("feat")) %>%
+  filter(
+    (`BPD-involved COMP-ASD-involved COMP` == "*") | 
+    (`NC COMP-BPD-involved COMP` == "*") |
+    (`NC COMP-ASD-involved COMP` == "*")
+  ) %>%
+  pivot_longer(cols = contains("COMP-"))
+
+
+```
+
+# Results
+
+## Distinguishing ASD-involved from BPD-involved interactions 
+Four of our eight base models were able to distinguish between ASD-involved and BPD-involved interactions based on permutation testing, with the exception of the *BODYsync*, *CROSSsync*, *HEADsync* and *INTRAsync* models (*BODYsync*: *p~FDR~* = `r round(df.nm[df.nm$model == "BODYsync" & df.nm$comparison == "ASD-COMP vs BPD-COMP",]$"p.fdr",3)`; *CROSSsync*: *p~FDR~* = `r round(df.nm[df.nm$model == "CROSSsync" & df.nm$comparison == "ASD-COMP vs BPD-COMP",]$"p.fdr",3)`; *HEADsync*: *p~FDR~* = `r round(df.nm[df.nm$model == "HEADsync" & df.nm$comparison == "ASD-COMP vs BPD-COMP",]$"p.fdr",3)`; *INTRAsync*: *p~FDR~* = `r round(df.nm[df.nm$model == "INTRAsync" & df.nm$comparison == "ASD-COMP vs BPD-COMP",]$"p.fdr",3)`; all other models *p~FDR~* < 0.05). Of the base models, the *CROSSturn* model performed best, with a balanced accuracy of `r round(df.t[df.t$comparison == "ASD-COMP vs BPD-COMP" & df.t$model == "CROSSturn",]$BAC,1)`%, weighing sensitivity and specificity equally, which were `r round(df.t[df.t$comparison == "ASD-COMP vs BPD-COMP" & df.t$model == "CROSSturn",]$sens,1)`% and `r round(df.t[df.t$comparison == "ASD-COMP vs BPD-COMP" & df.t$model == "CROSSturn",]$spec,1)`%, respectively. The other base models performing above chance were the *Speech* model with a balanced accuracy of `r round(df.t[df.t$comparison == "ASD-COMP vs BPD-COMP" & df.t$model == "Speech",]$BAC,1)`% (`r round(df.t[df.t$comparison == "ASD-COMP vs BPD-COMP" & df.t$model == "Speech",]$sens,1)`% sensitivity; `r round(df.t[df.t$comparison == "ASD-COMP vs BPD-COMP" & df.t$model == "Speech",]$spec,1)`% specificity), followed by the *MovEx* model with `r round(df.t[df.t$comparison == "ASD-COMP vs BPD-COMP" & df.t$model == "MovEx",]$BAC,1)`% (`r round(df.t[df.t$comparison == "ASD-COMP vs BPD-COMP" & df.t$model == "MovEx",]$sens,1)`% sensitivity; `r round(df.t[df.t$comparison == "ASD-COMP vs BPD-COMP" & df.t$model == "MovEx",]$spec,1)`% specificity) and the *FACEsync* model with `r round(df.t[df.t$comparison == "ASD-COMP vs BPD-COMP" & df.t$model == "FACEsync",]$BAC,1)`% (`r round(df.t[df.t$comparison == "ASD-COMP vs BPD-COMP" & df.t$model == "FACEsync",]$sens,1)`% sensitivity; `r round(df.t[df.t$comparison == "ASD-COMP vs BPD-COMP" & df.t$model == "FACEsync",]$spec,1)`% specificity). The stacking model outperformed all base models, although the difference between the stacking model and the *CROSSturn* model was not significant (see [!T]). The stacking model achieved a balanced accuracy of `r round(df.t[df.t$comparison == "ASD-COMP vs BPD-COMP" & df.t$model == "STACK",]$BAC,1)`% (`r round(df.t[df.t$comparison == "ASD-COMP vs BPD-COMP" & df.t$model == "STACK",]$sens,1)`% sensitivity; `r round(df.t[df.t$comparison == "ASD-COMP vs BPD-COMP" & df.t$model == "STACK",]$spec,1)`% specificity; see Figure [!X]), meaning that only `r int2words(sum(df.pred1$group == "BPD-involved, misclassified"))` interaction partners from BPD-involved interactions were misclassified as ASD-involved and `r int2words(sum(df.pred1$group == "ASD-involved, misclassified"))` were misclassified as BPD-involved despite being ASD-involved. The other `r int2words(sum(df.pred1$Errors != "misclassified"))` interaction partners were classified correctly by the stacking model (see Figure [!X]). For performance parameters and FDR-corrected *p*-values for all models, please consult the supplementary materials [!S].
+
+## Distinguishing ASD-involved from non-clinical interactions
+All base models except the *HEADsync* and the *INTRAsync* models performed significantly better than chance according to permutation tests  (*HEADsync*: *p~FDR~* = `r round(df.nm[df.nm$model == "HEADsync" & df.nm$comparison == "ASD-COMP vs COMP-COMP",]$"p.fdr",3)`; *INTRAsync*: *p~FDR~* = `r round(df.nm[df.nm$model == "INTRAsync" & df.nm$comparison == "ASD-COMP vs COMP-COMP",]$"p.fdr",3)`). For this comparison, the *FACEsync* model achieved the highest balanced accuracy, specifically `r round(df.t[df.t$comparison == "ASD-COMP vs COMP-COMP" & df.t$model == "FACEsync",]$BAC,1)`% (`r round(df.t[df.t$comparison == "ASD-COMP vs COMP-COMP" & df.t$model == "FACEsync",]$sens,1)`% sensitivity; `r round(df.t[df.t$comparison == "ASD-COMP vs COMP-COMP" & df.t$model == "FACEsync",]$spec,1)`% specificity), closely followed by the *CROSSsync* model with `r round(df.t[df.t$comparison == "ASD-COMP vs COMP-COMP" & df.t$model == "CROSSsync",]$BAC,1)`% balanced accuracy (`r round(df.t[df.t$comparison == "ASD-COMP vs COMP-COMP" & df.t$model == "CROSSsync",]$sens,1)`% sensitivity; `r round(df.t[df.t$comparison == "ASD-COMP vs COMP-COMP" & df.t$model == "CROSSsync",]$spec,1)`% specificity). The stacking model had a significantly higher balanced accuracy of `r round(df.t[df.t$comparison == "ASD-COMP vs COMP-COMP" & df.t$model == "STACK",]$BAC,1)`% (`r round(df.t[df.t$comparison == "ASD-COMP vs COMP-COMP" & df.t$model == "STACK",]$sens,1)`% sensitivity; `r round(df.t[df.t$comparison == "ASD-COMP vs COMP-COMP" & df.t$model == "STACK",]$spec,1)`% specificity). Here, `r int2words(sum(df.pred3$group == "ASD-involved, misclassified"))` ASD-involved interactions were misclassified as non-clinical, while `r int2words(sum(df.pred3$group == "non-clinical, misclassified"))` non-clinical interactions were mistaken as ASD-involved interactions. The rest of the interaction partners, `r int2words(sum(df.pred3$Errors != "misclassified"))` in total, were classified accurately. The stacking did not perform significantly better than the best base model (*FACEsync*: *p~FDR~* = `r round(df.comp3[df.comp3$Row == "FACEsync_Cl3",]$STACK_Cl3, 3)`) but outperformed all other base models (see [!T]).
+
+## Exploring influential features
+To explore the features in the interaction partners themselves, we plotted the three most influential features for the distinction between ASD-involved and BPD-involved as well as for the distinction between ASD-involved and non-clinical. We focused on the *CROSSturn*, *FACEsync*, *MovEx* and *Speech* models and determined the most influential features based on their feature weights. For the *Speech* model, we focused on individual features. Visual exploration of these features revealed COMP interaction partners in the ASD- or BPD-involved dyads adapting their behaviour to their clinical counterpart in some of the features (see Figure [!X]). For instance, group comparisons revealed that COMP interaction partners did not differ from their clinical interaction partners in the variance of their speech intensity in the hobbies conversation (ASD-involved: *p~HSD~* = `r round(df.feat.comp[df.feat.comp$feature == "int_var_H_speech" & df.feat.comp$comparison == "ASD-involved COMP-ASD-involved ASD",]$"p adj", 3)`; BPD-involved: *p~HSD~* = `r round(df.feat.comp[df.feat.comp$feature == "int_var_H_speech" & df.feat.comp$comparison == "BPD-involved COMP-BPD-involved BPD",]$"p adj", 3)`), but COMP interaction partners' behaviour differed between COMP interaction partners in BPD-involved and COMP interaction partners in ASD-involved interactions (*p~HSD~* < 0.05). Furthermore, COMP interaction partners in non-clinical interactions behaved comparably to COMP interaction partners in both clinical interactions (ASD-involved: *p~HSD~* = `r round(df.feat.comp[df.feat.comp$feature == "int_var_H_speech" & df.feat.comp$comparison == "NC COMP-ASD-involved COMP",]$"p adj", 3)`; BPD-involved: *p~HSD~* = `r round(df.feat.comp[df.feat.comp$feature == "int_var_H_speech" & df.feat.comp$comparison == "NC COMP-BPD-involved COMP",]$"p adj", 3)`). A similar pattern can be observed for the standard deviation of synchronisation of AU26, which measures jaw dropping, in the hobbies conversation with COMP interaction partners in clinical interactions not differing from their interaction partners (ASD-involved: *p~HSD~* = `r round(df.feat.comp[df.feat.comp$feature == "sd_H_AU26_r" & df.feat.comp$comparison == "BPD-involved COMP-BPD-involved BPD",]$"p adj", 3)`; BPD-involved: *p~HSD~* = `r round(df.feat.comp[df.feat.comp$feature == "sd_H_AU26_r" & df.feat.comp$comparison == "ASD-involved COMP-ASD-involved ASD",]$"p adj", 3)`), but COMP interaction partners in BPD-involved interactions differing from COMP interaction partners in ASD-involved interactions (*p~HSD~* < 0.05). COMP interaction partners also showed comparable total head motion in the hobbies conversation to their interaction partners (ASD-involved: *p~HSD~* = `r round(df.feat.comp[df.feat.comp$feature == "H_head_total_movement" & df.feat.comp$comparison == "ASD-involved COMP-ASD-involved ASD",]$"p adj", 3)`; BPD-involved: *p~HSD~* = `r round(df.feat.comp[df.feat.comp$feature == "H_head_total_movement" & df.feat.comp$comparison == "BPD-involved COMP-BPD-involved BPD",]$"p adj", 3)`), but here they also did not differ between clinical interactions (*p~HSD~* = `r round(df.feat.comp[df.feat.comp$feature == "H_head_total_movement" & df.feat.comp$comparison == "BPD-involved COMP-ASD-involved COMP",]$"p adj", 3)`). However, COMP interaction partners in non-clinical interactions exhibited more head motion than COMP interaction partners in ASD-involved interactions (*p~HSD~* = `r round(df.feat.comp[df.feat.comp$feature == "H_head_total_movement" & df.feat.comp$comparison == "NC COMP-ASD-involved COMP",]$"p adj", 3)`), but not from COMP interaction partners in BPD-involved interactions (*p~HSD~* = `r round(df.feat.comp[df.feat.comp$feature == "H_head_total_movement" & df.feat.comp$comparison == "NC COMP-BPD-involved COMP",]$"p adj", 3)`). 
+
+## Exploring multi-group classification
+Arguably, the above results already show that distinguishing between the two clinical labels involves a different pattern of models compared to distinguishing between the ASD-involved from the non-clinical label, which also reflects clinical decision making (a clinical decision between clinical labels is derived on different information than the decision between the presence and absence of a clinical label). Nevertheless, we also explored the use of a multi-group classification which uses the output of the three one-vs-one classifiers to predict one of the three possible labels: ASD-involved, BPD-involved or non-clinical. All base models performed significantly above chance except for the *BODYsync* model (*p~FDR~* = `r round(df.nm[df.nm$model == "BODYsync" & df.nm$comparison == "MultiGroup",]$"p.fdr",3)`). The best base model was the *Speech* model which achieved a balanced accuracy of `r round(df.nm[df.nm$comparison == "MultiGroup" & df.nm$model == "Speech",]$BAC,1)`%, followed by the *MovEx* model which reached `r round(df.nm[df.nm$comparison == "MultiGroup" & df.nm$model == "MovEx",]$BAC,1)`% balanced accuracy. The stacking model performed comparable to those two base models with `r round(df.nm[df.nm$comparison == "MultiGroup" & df.nm$model == "STACK",]$BAC,1)`% balanced accuracy, while outperforming all other base models (see [!T]). The confusion matrix of the stacking model revealed that many of BPD-involved and non-clinical interactions were misclassified as ASD-involved, `r round(100*sum(df.pred4$group == "BPD-involved as ASD-involved")/sum(df.pred4$EXP_LABEL == "BPD-involved"),1)`% and `r round(100*sum(df.pred4$group == "non-clinical as ASD-involved")/sum(df.pred4$EXP_LABEL == "non-clinical"),1)`% respectively, while ASD-involved interactions were detected accurately in `r round(100*sum(df.pred4$group == "ASD-involved as ASD-involved")/sum(df.pred4$EXP_LABEL == "ASD-involved"),1)`% of the cases, possibly reflecting our focus on ASD associated features. 
+
+
+```{r tbl}
+
+kable(
+  rbind(
+    df.comp1 %>%
+    separate(Row, into = c("model", "comparison")) %>%
+    select(starts_with("STACK"), comparison, model) %>%
+    mutate(
+      model = recode(model, !!!ls.svm),
+      comparison = recode(comparison, !!!ls.comp)
+    ) %>%
+    pivot_wider(values_from = where(is.numeric), names_from = model),
+    df.comp2 %>%
+    separate(Row, into = c("model", "comparison")) %>%
+    select(starts_with("STACK"), comparison, model) %>%
+    mutate(
+      model = recode(model, !!!ls.svm),
+      comparison = recode(comparison, !!!ls.comp)
+    ) %>%
+    pivot_wider(values_from = where(is.numeric), names_from = model),
+    df.comp3 %>%
+    separate(Row, into = c("model", "comparison")) %>%
+    select(starts_with("STACK"), comparison, model) %>%
+    mutate(
+      model = recode(model, !!!ls.svm),
+      comparison = recode(comparison, !!!ls.comp)
+    ) %>%
+    pivot_wider(values_from = where(is.numeric), names_from = model),
+    df.comp4 %>%
+    separate(Row, into = c("model", "comparison")) %>%
+    select(starts_with("STACK"), comparison, model) %>%
+    mutate(
+      model = recode(model, !!!ls.svm),
+      comparison = recode(comparison, !!!ls.comp)
+    ) %>%
+    pivot_wider(values_from = where(is.numeric), names_from = model)
+  ) %>% select(-STACK) %>% 
+    mutate_if(is.numeric, ~ifelse(. < 0.05,
+                                  sprintf("%.3f*", .),
+                                  sprintf("%.3f", .))) %>%
+    arrange(comparison)
+  )
+
+```

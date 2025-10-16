@@ -1,0 +1,10 @@
+Row,BODYsync_G2_vs_REST,CROSSsync_G2_vs_REST,CROSSturn_G2_vs_REST,FACEsync_G2_vs_REST,HEADsync_G2_vs_REST,INTRAsync_G2_vs_REST,MovEx_G2_vs_REST,Speech_G2_vs_REST,STACK_G2_vs_REST
+BODYsync_G2_vs_REST,0,1,1,1,1,1,1,1,1
+CROSSsync_G2_vs_REST,1,0,0,0,1,0,1,0,1
+CROSSturn_G2_vs_REST,1,0,0,1,1,0,1,1,1
+FACEsync_G2_vs_REST,1,0,1,0,0,1,1,0,1
+HEADsync_G2_vs_REST,1,1,1,0,0,1,0,0,0
+INTRAsync_G2_vs_REST,1,0,0,1,1,0,1,1,1
+MovEx_G2_vs_REST,1,1,1,1,0,1,0,0,0
+Speech_G2_vs_REST,1,0,1,0,0,1,0,0,1
+STACK_G2_vs_REST,1,1,1,1,0,1,0,1,0

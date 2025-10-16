@@ -1,0 +1,1008 @@
+---
+title: "Supplementary materials"
+subtitle: 'It takes two: digitally assisted differential diagnostics of ASD based on dyadic interactions'
+author: "I S Plank et al."
+date: "`r Sys.Date()`"
+output: 
+  pdf_document:
+    toc: true
+    number_sections: true
+fontsize: 10pt
+geometry: margin=0.5in
+bibliography: BOKI_supp.bib
+csl: nature.csl
+---
+
+```{r setup, include=FALSE}
+
+# clear global environment
+rm(list=ls())
+
+knitr::opts_chunk$set(echo = F)
+
+# load libraries
+ls.packages = c("tidyverse",        # tibble stuff
+                "knitr",            # kable
+                "ggpubr",           # ggarrange
+                "ggrain",           # geom_rain
+                "Hmisc",
+                "rstatix",          # shapiro_test
+                "emmeans",          # group comparisons for anovas
+                "flextable",        # regulartable
+                "officer",          # read_docx
+                "english"           # numbers to words
+                )
+lapply(ls.packages, library, character.only=TRUE)
+
+# set colour schemes
+custom.col4 = c("#004D40", "#1E88E5", "#FFC107", "#D81B60", "#5D3A9B", "#E66100")
+
+# set figure directory
+svm.dir = "./SVM_classifier"
+fig.dir = file.path(svm.dir, "figures")
+
+# function to change small numbers
+int2words = function(x) {
+  if (x <= 12) {
+    x = as.english(x)
+  }
+  as.character(x)
+} 
+
+
+```
+
+```{r get, include=F, warning=F, message=F}
+
+# order of the classifiers
+ls.svm = c("BODYsync", "CROSSsync", "CROSSturn", "FACEsync", "HEADsync", 
+           "INTRAsync", "MovEx", "Speech", "STACK")
+names(ls.svm) = paste0("A", 1:length(ls.svm))
+
+# order of the comparisons
+ls.comp = c("ASD-inv vs. BPD-inv", "BPD-inv vs. COMP", "ASD-inv vs. COMP", "Multi-Group")
+names(ls.comp) = c(paste0("Cl", 1:3), "MultiClass")
+
+# load speech limits
+df.limits = read_csv(file.path("speech", "BOKI_pitch_limits.csv"))
+
+# load raw data
+df.lng = read_csv(file.path(svm.dir, "BOKI_NM_inputdata.csv")) %>%
+  select(-labelNo, -BPD, -ASD) %>%
+  ungroup() %>%
+  mutate(
+    # compute iq estimate
+    IQ.estimate = (MWT_iq + CFT_iq)/2, 
+    # rename BERT values
+    BERT.rt = rt/1000, # convert to seconds
+    BERT.acc = acc,
+    acc = NULL, rt = NULL, MWT_iq = NULL, CFT_iq = NULL
+  ) %>%
+  pivot_longer(cols = where(is.numeric), names_to = "feature") %>%
+  mutate(
+    label = case_match(label, 
+                       "BPD-COMP" ~ "BPD-involved",
+                       "ASD-COMP" ~ "ASD-involved",
+                       "COMP-COMP" ~ "COMP"),
+    task = case_when(
+      grepl("H_", feature) | grepl("_H$", feature) ~ "hobbies",
+      grepl("M_", feature) | grepl("_M$", feature) ~ "mealplanning"
+    )
+  ) 
+
+# load feature information
+df.feat = list.files(path = file.path(svm.dir, "featureInfos"), pattern = "*.csv") %>%
+  setNames(nm = .) %>%
+  map_df(~read_delim(file.path(svm.dir, "featureInfos", .), show_col_types = F, delim = '\t'), .id = "fln") %>%
+  mutate(
+    model = recode(gsub(".*Multi_(.+)_Feat.*", "\\1", fln), !!!ls.svm),
+    comparison = recode(gsub(".*Features_(.+)\\.csv", "\\1", fln), !!!ls.comp),
+    fln = NULL
+  ) %>% relocate(model, comparison) 
+
+df.feat.best = df.feat %>%
+  filter(model %in% c("MovEx", "CROSSturn", "FACEsync", "Speech")) %>%
+  # ignore dyadic feature from Speech model
+  filter(!grepl("^dyad_.*", Feature)) %>%
+  group_by(model, comparison) %>%
+  arrange(desc(Mean_W_GM)) %>% 
+  mutate(
+    row  = row_number(),
+    best = row <= 3
+  )
+
+# get list of the best features
+feats = unique(df.feat.best[df.feat.best$best & df.feat.best$comparison == "ASD-inv vs. BPD-inv",]$Feature)
+
+# select this data
+df.feat.sel = df.lng %>% filter(feature %in% feats) %>%
+  mutate(
+    model = case_when(
+      grepl("^self", feature) | grepl("^other", feature) ~ "CROSSturn",
+      grepl("total_movement|mean_intensity", feature) ~ "MovEx",
+      grepl("speech", feature) ~ "Speech",
+      grepl("AU", feature) ~ "FACEsync"
+    ), 
+    #add nicer names for the features
+    featnames = case_match(
+      feature,
+      # speech model
+      "art_sync_M_speech" ~ "M: turn-based adaptation of articulation rate",
+      "int_var_H_speech" ~ "H: variance of speech intensity",
+      "pit_sync_H_speech" ~ "H: turn-based adaptation of pitch",
+      # FACEsync model
+      "max_H_AU26_r" ~ "H: maximum synchronisation of AU26",
+      "sd_H_AU26_r" ~ "H: SD of synchronisation of AU26",
+      "mean_H_AU23_r" ~ "H: mean of synchronisation of AU23",
+      # CROSSturn model
+      "self_md_H_AU07_r" ~ "H: median of AU07 while speaking",
+      "other_md_H_AU07_r" ~ "H: median of AU07 while listening",
+      "self_mean_H_AU07_r" ~ "H: mean of AU07 while speaking",
+      # MovEx
+      "mean_intensity_H" ~ "H: mean intensity of facial expressions",
+      "mean_intensity_M" ~ "M: mean intensity of facial expressions",
+      "H_head_total_movement" ~ "H: total head motion"
+      )
+  )
+
+
+# group comparisons for the features
+df.feat.comp = data.frame()
+
+for (f in feats) {
+  
+  df.sel  = df.feat.sel %>%
+    mutate(
+      comb = paste(label, ilabel)
+    ) %>% filter(feature == f) %>% drop_na()
+  df.sel2 = df.sel
+  
+  # check which outcomes of interest are normally distributed
+  df.sht = df.sel %>% 
+    group_by(ilabel) %>%
+    shapiro_test(value) %>%
+    filter(p < 0.05)
+  
+  # if at least one is not normally distributed, then rank transform
+  if (nrow(df.sht) > 0) {
+    df.sel = df.sel %>%
+      ungroup %>%
+      mutate(
+        value = rank(value)
+      )
+  }
+  
+  # compute the anova between groups
+  aov.out  = aov(value ~ comb, data = as.data.frame(df.sel))
+  
+  # perform group comparisons
+  aov.pair = TukeyHSD(aov.out)
+  
+  # put all the information in df.feat.comp
+  df.feat.comp = rbind(
+    df.feat.comp, 
+    as.data.frame(aov.pair[["comb"]]) %>%
+      rownames_to_column(var = "comparison") %>%
+      mutate(feature = f)
+  )
+  
+}
+
+df.feat.comp = df.feat.comp %>%
+  group_by(comparison) %>%
+  mutate(
+    sig     = if_else(`p adj` < 0.05, "*", ""),
+    `p adj` = round(`p adj`, 3)
+  ) %>%
+  select(feature, comparison, `p adj`, sig)
+
+
+# load performance data
+for (i in 1:length(ls.svm)) {
+  model = sprintf("_A%d", i)
+  df.m = lapply(list.files(path = file.path(svm.dir, "performanceModels"), 
+                           pattern = sprintf("A%d.*_PredictionMetrics.*csv", i), full.names = T), 
+                read_delim, delim = "\t") %>%
+    reduce(full_join, by = "Metric") %>% 
+    rename_if(is.numeric,function(x) paste0(x,model))
+  if (i == 1) {
+    df = df.m
+  } else {
+    df = merge(df, df.m)
+  }
+}
+
+df.t = as.data.frame(t(df[,2:ncol(df)]))
+colnames(df.t) = df$Metric
+df.t = df.t %>%
+  rownames_to_column(var = "name") %>%
+  separate(name, sep = "_", into = c("comparison", "model")) %>%
+  mutate(
+    model = recode(model, !!!ls.svm)
+  )
+
+# load prediction data
+df.pred1 = read_delim(file.path(svm.dir, "performanceModels", 
+                          "ClassModel_Multi_A9_CV_Predictions_Cl_1ASD-COMP_vs_BPD-COMP.csv"),
+                delim = "\t") %>%
+  mutate(
+    Cases  = row_number(),
+    Errors = if_else(Errors == 0, "accurately classified", "misclassified"),
+    EXP_LABEL = if_else(EXP_LABEL == 1, "ASD-involved", "BPD-involved"),
+    group = paste0(EXP_LABEL, ", ", Errors)
+  )
+df.pred2 = read_delim(file.path(svm.dir, "performanceModels", 
+                          "ClassModel_Multi_A9_CV_Predictions_Cl_2BPD-COMP_vs_COMP-COMP.csv"),
+                delim = "\t") %>%
+  mutate(
+    Cases  = row_number(),
+    Errors = if_else(Errors == 0, "accurately classified", "misclassified"),
+    EXP_LABEL = if_else(EXP_LABEL == 1, "BPD-involved", "COMP"),
+    group = paste0(EXP_LABEL, ", ", Errors)
+  )
+df.pred3 = read_delim(file.path(svm.dir, "performanceModels", 
+                          "ClassModel_Multi_A9_CV_Predictions_Cl_3ASD-COMP_vs_COMP-COMP.csv"),
+                delim = "\t") %>%
+  mutate(
+    Cases  = row_number(),
+    Errors = if_else(Errors == 0, "accurately classified", "misclassified"),
+    EXP_LABEL = if_else(EXP_LABEL == 1, "ASD-involved", "COMP"),
+    group = paste0(EXP_LABEL, ", ", Errors)
+  )
+df.pred4 = read_delim(file.path(svm.dir, "performanceModels", 
+                          "ClassModel_Multi_A9_CV_Predictions_MultiGroup.csv"),
+                delim = "\t") %>%
+  mutate(
+    Cases  = row_number(),
+    Errors = if_else(Errors == 0, "accurately classified", "misclassified"),
+    EXP_LABEL = case_match(EXP_LABEL,
+                           1 ~ "ASD-involved", 
+                           2 ~ "BPD-involved", 
+                           3 ~ "COMP"),
+    PRED_LABEL = case_match(PRED_LABEL ,
+                           1 ~ "ASD-involved", 
+                           2 ~ "BPD-involved", 
+                           3 ~ "COMP"),
+    group = paste0(EXP_LABEL, " as ", PRED_LABEL)
+  )
+
+## performance stuff
+df.perf = list(
+  read_csv(file.path(svm.dir, "compModels", "CompareTable_Cl1 _pp.csv")),
+  read_csv(file.path(svm.dir, "compModels", "CompareTable_Cl2 _pp.csv")),
+  read_csv(file.path(svm.dir, "compModels", "CompareTable_Cl3 _pp.csv"))) %>%
+  reduce(full_join, by = "Row") %>%
+  pivot_longer(cols = where(is.numeric), values_to = "BAC") %>%
+  separate(name, sep = "_", into = c("model", "comparison")) %>%
+  mutate(
+    comparison = recode(comparison, !!!ls.comp)
+  )
+df.multi = rbind(
+  read_csv(file.path(svm.dir, "compModels", "CompareTable_G1-vs-REST_pp.csv")) %>%
+    select(-Row) %>% pivot_longer(cols = everything()),
+  read_csv(file.path(svm.dir, "compModels", "CompareTable_G2-vs-REST_pp.csv")) %>%
+    select(-Row) %>% pivot_longer(cols = everything()),
+  read_csv(file.path(svm.dir, "compModels", "CompareTable_G3-vs-REST_pp.csv")) %>%
+    select(-Row) %>% pivot_longer(cols = everything()),
+  read_csv(file.path(svm.dir, "compModels", "CompareTable_MultiClass_pp.csv")) %>%
+    select(-Row) %>% pivot_longer(cols = everything())) %>%
+  rename("BAC" = "value") %>%
+  mutate(
+    name = gsub("_vs_", "vs", name)
+  ) %>% separate(name, sep = "_", into = c("model", "comparison")) %>%
+  mutate(
+    comparison = case_match(comparison, 
+                            "G1vsREST" ~ "ASD-inv vs. all",
+                            "G2vsREST" ~ "BPD-inv vs. all",
+                            "G3vsREST" ~ "COMP vs. all",
+                            "MultiClass" ~ "MultiGroup")
+  )
+
+## compModels
+df.comp1 = read_csv(file.path(svm.dir, "compModels", "CompareTable_Cl1 _P_fdr.csv"))
+df.comp2 = read_csv(file.path(svm.dir, "compModels", "CompareTable_Cl2 _P_fdr.csv"))
+df.comp3 = read_csv(file.path(svm.dir, "compModels", "CompareTable_Cl3 _P_fdr.csv"))
+df.comp4 = read_csv(file.path(svm.dir, "compModels", "CompareTable_MultiClass_P_fdr.csv"))
+
+# NM values including from permutation tests
+df.nm = read_csv(file.path(svm.dir, "NMvalues.csv")) %>%
+  # perform fdr correction
+  mutate(
+    `p.fdr` = p.adjust(pvals, method = "BY", n = sum(!is.na(pvals))),
+    sig     = if_else(`p.fdr` < 0.05, "*", "")
+  )
+
+# save everything
+save.image("BOKI_supps.RData")
+
+```
+
+
+```{r plots, include=F, warning=F, message=F}
+
+## Model predictions
+
+n_ASD = sum(df.pred1$EXP_LABEL == "ASD-involved")
+
+p = ggplot(df.pred1, aes(x = Cases, y = Mean_Score, colour = group, shape = group,
+               ymin = Mean_Score - Std_Score, 
+               ymax = Mean_Score + Std_Score)) + 
+  geom_rect(aes(xmin = 0, xmax = n_ASD+0.5, ymin = 0, ymax = 3), 
+            fill = custom.col4[1], alpha = 0.004, color = NA) +
+  geom_rect(aes(xmin = n_ASD+0.5, xmax = nrow(df.pred1)+1, ymin = 0, ymax = -3), 
+            fill = custom.col4[2], alpha = 0.004, color = NA) +
+  geom_pointrange(size = 0.4) +
+  scale_color_manual(values = c(custom.col4[1], custom.col4[1], custom.col4[2], custom.col4[2])) + 
+  scale_shape_manual(values = c(19, 4, 19, 4)) +
+  labs(title = "", x = "Participant", y = "SVM decision score") + 
+  theme_bw() + 
+  theme(legend.position = c(0.8, 0.84), plot.title = element_blank(), 
+        legend.title = element_blank(), text = element_text(size = 10),
+        #legend.margin=margin(t=-5),
+        legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid')
+        ) #legend.direction = "horizontal", 
+
+ggsave(p, filename = file.path(fig.dir, "modelPred.png"), width = 6, height = 4)
+
+## Model performance
+
+p = df.perf %>%
+  ggplot(., aes(x = model, fill = comparison, y = BAC)) +
+  geom_boxplot(alpha = 0.8, linewidth = 1, outlier.shape = NA) + 
+  labs (x = "", y = "balanced accuracy") + 
+  scale_fill_manual(values = custom.col4[4:7]) +
+  geom_hline(yintercept = 50, colour = custom.col4[2], linewidth = 1) +
+  ylim(0, 100) +
+  theme_bw() + 
+  theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.direction = "horizontal", text = element_text(size = 10),
+        legend.title = element_blank(), legend.margin=margin(t=-15))
+ggsave(p, filename = file.path(fig.dir, "modelPerformance.png"), width = 6, height = 4)
+
+p = df.multi %>%
+  ggplot(., aes(x = model, fill = comparison, y = BAC)) +
+  geom_boxplot(alpha = 0.8, linewidth = 1, outlier.shape = NA) + 
+  labs (x = "", y = "performance") + 
+  scale_fill_manual(values = custom.col4[3:7]) +
+  geom_hline(yintercept = 50, colour = custom.col4[2], linewidth = 1) +
+  ylim(0, 100) +
+  theme_bw() + 
+  theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5), #element_blank(), 
+        legend.direction = "horizontal", text = element_text(size = 10),
+        legend.title = element_blank(), legend.margin=margin(t=-15))
+ggsave(p, filename = file.path(fig.dir, "modelPerformance_multi.png"), width = 6, height = 4)
+
+## Features
+
+p = df.feat.sel %>%
+  mutate(
+    label = if_else(label == "COMP", "COMP dyad", label),
+    `interaction partner` = ilabel
+  ) %>%
+  ggplot(aes(label, value, fill = `interaction partner`)) + #
+  geom_boxplot(alpha = 0.8, linewidth = 0.8) +
+  scale_fill_manual(values = custom.col4) +
+  scale_color_manual(values = custom.col4) +
+  facet_wrap(model ~ featnames, scales = "free", ncol = 3) +
+  labs(title = "", x = "", y = "") + #df.info$unit[i]
+  theme_bw() + 
+  theme(legend.position = "bottom", plot.title = element_blank(), 
+        legend.direction = "horizontal", text = element_text(size = 10),
+        legend.margin=margin(t=-15))
+
+ggsave(p, filename = file.path(fig.dir, "plotFeatures.png"), width = 12, height = 9)
+
+```
+
+`r s  = 0`
+
+# `r s = s + 1`S`r s``r ss = 0` Version numbers for R and all packages
+
+```{r lib_versions}
+
+print(R.Version()$version.string)
+
+for (package in ls.packages) {
+  print(sprintf("%s version %s", package, packageVersion(package)))
+}
+```
+
+# `r s = s + 1`S`r s``r ss = 0` Inclusion and exclusion criteria 
+
+Inclusion criteria applying to all participants: 
+
+* no neurological diagnoses
+* at least 18 and at most 60 years of age
+* normal or corrected-to-normal vision
+* legally binding, written informed consent from the participant for study participation
+
+Additional inclusion criteria for ASD participants: 
+
+* valid F84 diagnosis according to ICD-10
+* normal speaking abilities
+
+Additional inclusion criteria for BPD participants: 
+
+* valid F60.31 diagnosis according to ICD-10
+* no F84 diagnosis according to ICD-10
+* IQ estimate above 70
+
+Additional inclusion criteria for comparison participants: 
+
+* IQ estimate above 70
+* no psychiatric diagnoses
+* no current psychotropic medication
+
+Furthermore, we applied the following exclusion criteria: 
+
+* underage people or people older than 60 years
+* inability to speak
+* current or previous neurological disorder
+* acute suicidality, self-harming or aggressive behaviour
+* lack of legally binding informed consent
+
+Testing was discontinued if participants withdrew their consent, exclusion criteria applied or in the case of technical difficulties. 
+
+# `r s = s + 1`S`r s``r ss = 0` Measures
+
+We collected the following self-report questionnaires: 
+
+* Autism-like traits: Autism Quotient, AQ [@baron-cohen_autism-spectrum_2001]
+* Empathy: Saarbrücker Persönlichkeitsfragebogen, SPF [@Paulus2009], which is the German version of the interpersonal reactivity index
+* Alexithymia: Toronto Alexithymia Scale, TAS20 [@Popp2008]
+* Depressiveness: Beck Depression Inventory, BDI [@hautzinger_beck-depressions-inventar_1994]
+* Self-monitoring: Self-monitoring Scale, SMS [@graf_german_2004]
+* Movement difficulties: Adult Dyspraxia Checklist, ADC [@kirby_development_2010]
+
+For all participants recruited for this project, we also collected the short version of the Borderline Symptom List, BSL-23 [@bohus_short_2008].
+
+For 37 of the dyads, we used a plexiglass screen placed between the interaction partners on the table to decrease the chances of spreading an undetected infection. We applied a transparent anti-reflection foil to reduce any mirroring effects. During the conversation, participants took off their face masks. We asked these participants how much the plexiglass influenced them during the interactions (plexi; scale from 0 to 3). All participants were asked how much the cameras influenced their behaviour (video; scale from 0 to 3). Rapport is a sum of the following ratings, all on scales from 0 to 3, thus ranging from 0 to 15: 
+
+* How likeable was your interaction partner? 
+* How friendly was your interaction partner? 
+* How comfortable did you feel during the conversation?
+* How smooth was the communication between you and your conversation partner?
+* How well did your conversation partner respond to you?
+
+##  `r ss = ss + 1`S`r s`.`r ss` Group comparisons based on diagnostic status
+
+```{r demo1}
+
+df.sub = df.lng %>%
+    filter(is.na(task)) %>%
+    mutate_if(is.character, as.factor) %>%
+    select(-task)
+
+# loop through the questionnaires etc
+df.demo = data.frame()
+feats = unique(df.sub$feature)
+
+for (f in feats) {
+  
+  df.sel  = df.sub %>% filter(feature == f) %>% drop_na()
+  df.sel2 = df.sub %>% filter(feature == f) %>% drop_na()
+  
+  # check which outcomes of interest are normally distributed
+  df.sht = df.sel %>% 
+    group_by(ilabel) %>%
+    shapiro_test(value) %>%
+    filter(p < 0.05)
+  
+  # if at least one is not normally distributed, then rank transform > turns into Kruskal-Wallis-test
+  if (nrow(df.sht) > 0) {
+    df.sel = df.sel %>%
+      ungroup %>%
+      mutate(
+        value = rank(value)
+      )
+  }
+  
+  # compute the anova between groups
+  aov.out  = aov(value ~ ilabel, data = as.data.frame(df.sel))
+  
+  # check whether this is the BSL > not collected in original ASD sample
+  if (f != "BSL_total") {
+    # perform group comparisons
+    aov.pair = TukeyHSD(aov.out)
+    
+    # get the p-values
+    BPDvASD  = aov.pair$ilabel["BPD-ASD",4]
+    COMPvASD = aov.pair$ilabel["COMP-ASD",4]
+    COMPvBPD = aov.pair$ilabel["COMP-BPD",4]
+  
+  } else {
+    # get the results
+    aov.res = summary(aov.out)
+    
+    # get the p-values
+    BPDvASD  = NA
+    COMPvASD = NA
+    COMPvBPD = aov.res[[1]][["Pr(>F)"]][1]
+    
+  }
+  
+  # put all the information in df.demo
+  df.demo = rbind(df.demo, 
+                  data.frame(
+                    measurement = f,
+                    ASD         = sprintf("%.2f (±%.2f), n = %.0f", 
+                                          mean(df.sel2[df.sel2$ilabel == "ASD",]$value), 
+                                          sd(df.sel2[df.sel2$ilabel == "ASD",]$value),
+                                          sum(df.sel2$ilabel == "ASD")
+                    ),
+                    BPD         = sprintf("%.2f (±%.2f), n = %.0f", 
+                                          mean(df.sel2[df.sel2$ilabel == "BPD",]$value), 
+                                          sd(df.sel2[df.sel2$ilabel == "BPD",]$value),
+                                          sum(df.sel2$ilabel == "BPD")
+                    ),
+                    COMP        = sprintf("%.2f (±%.2f), n = %.0f", 
+                                          mean(df.sel2[df.sel2$ilabel == "COMP",]$value), 
+                                          sd(df.sel2[df.sel2$ilabel == "COMP",]$value),
+                                          sum(df.sel2$ilabel == "COMP")
+                    ),
+                    `BPDvsASD`   = BPDvASD,
+                    `COMPvsASD`  = COMPvASD,
+                    `COMPvsBPD`  = COMPvBPD
+                  ))
+  
+}
+
+
+kable(df.demo %>%
+        mutate(
+          # perform fdr correction
+          `BPDvsASD`  = p.adjust(`BPDvsASD`,  method = "BY", n = length(feats)),
+          `COMPvsASD` = p.adjust(`COMPvsASD`, method = "BY", n = length(feats)),
+          `COMPvsBPD` = p.adjust(`COMPvsBPD`, method = "BY", n = length(feats)),
+          # add asterisk if significant
+          `BPDvsASD`  = if_else(`BPDvsASD` < 0.05, 
+                               sprintf("%.3f*",`BPDvsASD`),
+                               sprintf("%.3f", `BPDvsASD`)),
+          # add asterisk if significant
+          `COMPvsASD`  = if_else(`COMPvsASD` < 0.05, 
+                               sprintf("%.3f*",`COMPvsASD`),
+                               sprintf("%.3f", `COMPvsASD`)),
+          # add asterisk if significant
+          `COMPvsBPD`  = if_else(`COMPvsBPD` < 0.05, 
+                               sprintf("%.3f*",`COMPvsBPD`),
+                               sprintf("%.3f", `COMPvsBPD`)),
+        ) %>% arrange(measurement))
+
+```
+
+
+```{r gender1}
+
+# get gender frequencies and compare them across groups
+df.gen = df.sub %>% select(ID, gender, ilabel) %>% distinct()
+tb.gen = xtabs(~ gender + ilabel, data = df.gen)
+ct.gen = chisq.test(tb.gen)
+
+tb.gen
+
+ct.gen
+
+```
+
+
+# `r s = s + 1`S`r s``r ss = 0` Features 
+
+##  `r ss = ss + 1`S`r s`.`r ss` Facial expressions extracted from OpenFace
+
+We only included data of participants with a mean confidence of tracked frames greater than 75% and more than 90% successfully tracked frames. Facial expressions were captured as action units. We did not extract emotional expressions from these facial expressions as coherence between facial expressions and emotions is not a given and might be even less so for autistic people [@costa_expressive_2017]. 
+
+For the calculation of synchronisation, we included rotational parameters (yaw, roll, pitch) as well as the same action units as in our previous study [@koehler_machine_2024]: 
+
+* Mealplanning: 1, 2, 6, 7, 9, 14, 15, 17, 20, 25, 26 and 45 
+* Hobbies: 1, 2, 6, 7, 9, 15, 17, 20, 23, 25, 26 and 45
+
+We also extracted total facial expressiveness as mean intensity of all action units for each interaction partner to be included in the *MovEx* and the *CROSSturn* models. For the *CROSSturn* model, we also included other action units, as listed below. 
+
+These correspond to the following movements: 
+
+* AU1: inner brow raiser
+* AU2: outer brow raiser
+* AU4: brow lowerer (only *CROSSturn*)
+* AU5: upper lid raiser (only *CROSSturn*)
+* AU6: cheek raiser
+* AU7: lid tightener
+* AU9: nose wrinkler
+* AU10: upper lip raiser (only *CROSSturn*)
+* AU12: lip corner puller (only *CROSSturn*)
+* AU14: dimpler
+* AU15: lip corner depressor
+* AU17: chin raiser
+* AU20: lip stretcher
+* AU23: lip tightener
+* AU25: lips part
+* AU26: jaw drop
+* AU45: blink
+
+Furthermore, we used translational head position parameters to infer head motion using the following formula with $\Delta_t$ referring to the respective frame-to-frame changes:
+
+$$\text{head movement} = \sqrt{\Delta_t x^2 + \Delta_t y^2 + \Delta_t z^2}$$
+
+
+##  `r ss = ss + 1`S`r s`.`r ss` Motion quantity extracted using Motion Energy Analysis
+
+This figure shows body (red and purple) and head (yellow and orange) regions of interests of each interaction partner separately:
+
+`r include_graphics(file.path(fig.dir, "MEA_ROIs-v2.png"))`
+
+There was always a space between the head and body region. Regions were chosen such that they cover the full range of motion throughout one conversation of one interaction partner. Thus, their sizes differed which is why we scaled all values. 
+
+In addition to using the motion quantity to compute synchronisation, we also extracted total movement in each region of interest for each interaction partner to be included in the *MovEx* model. 
+
+##  `r ss = ss + 1`S`r s`.`r ss` Speech and turn-taking features
+
+We extracted pitch using praat's autocorrelation method, a technique widely recognized for its reliability and accuracy [@praat]. We implemented a two-step pitch extraction method, as outlined by Hirst [@hirst_analysis_2011]. First, to capture a broad range of frequencies, we set a low pitch floor of 50 Hz and a high pitch ceiling of 700 Hz, with a time step of 15 ms. All other parameters were set to Praat's default values. Second, using these initial pitch values, we determined the first and third quartiles of pitch for each participant and task. We then used these quartiles to compute individual pitch floors and ceilings with the following algorithm:
+
+$$\text{floor} = \min\left( 0.75 \cdot Q_{1, hobbies}, 0.75 \cdot Q_{1, mealplanning}\right)$$
+
+$$\text{ceiling} = \max\left( 2.5 \cdot Q_{3, hobbies}, 2.5 \cdot Q_{3, mealplanning}\right)$$
+
+We then used these individual pitch floors (range = `r min(df.limits$floor_pp)` to `r max(df.limits$floor_pp)`Hz, mean = `r round(mean(df.limits$floor_pp),1)` ± `r round(sd(df.limits$floor_pp),1)`) and ceilings (range = `r min(df.limits$ceiling_pp)` to `r max(df.limits$ceiling_pp)`Hz, mean = `r round(mean(df.limits$ceiling_pp),1)` ± `r round(sd(df.limits$ceiling_pp),1)`) to extract pitch. To ensure an equal number of frames for all participants, we maintained a consistent time step across all analyses. By default, praat calculates this time step using the following formula:
+
+$$\text{timestep} = \frac{0.75}{\text{floor}}$$
+
+Here, we used the same time step of 0.016 as in our previous study [@plank2023automated] which was determined based on the minimum individual pitch floor of that sample. Since the new sample did not include anyone with a lower pitch floor, the time step fits both samples. 
+
+Intensity was extracted by convolving the squared sound with a Gaussian analysis window. We used praat's default values of minimum pitch 100Hz and time step of 0.01s. 
+
+To estimate synchrony, we extracted continuous pitch and intensity time series for every millisecond of the recording. For pitch extraction, we used consistent parameters across all participants instead of individualized settings. This was necessary because the analysis width depends on the pitch floor. Given the heterogeneity of our sample, we opted for a wide range of considered frequencies, setting the pitch floor at 50Hz and the pitch ceiling at 700Hz. For intensity, we relied on Praat's default values.
+
+In the case of turn-based synchronization, we correlated the median pitch or intensity of each turn with the median pitch or intensity of the preceding turn.
+
+Next, we used the uhm-o-meter [@de_jong_uhm-o-meter_2021; @de_jong_praat_2021] to differentiate between periods of speaking and silence, identify syllables and extract several prosodic features (total number of syllables, total number of silent phases, duration of speaking as phonation time, speech rate as number of syllables per second, articulation rate as number of syllables per phonation time, average syllable duration and silence-to-turn ratio). The resulting speaking and silent instances were visually and aurally inspected to verify the accuracy of the algorithm.  
+
+##  `r ss = ss + 1`S`r s`.`r ss` Cross-modal features
+
+We captured two types of cross-modal features: 
+
+* Interpersonal synchronisation of one person's head with the other person's body movement and vice versa
+* AU activation, body and head movement during listening and speaking
+
+##  `r ss = ss + 1`S`r s`.`r ss` Synchrony computations
+
+We used the following settings for our windowed lagged cross-correlation (WLCC): 
+
+```{r sync_table}
+
+measure = c("Facial action units synchronisation", "Body MEA synchronisation", 
+            "Head MEA synchronisation", "Intrapersonal synchrony", 
+            "Pitch synchrony", "Intensity synchrony")
+
+window = c(7, 30, 30, 30, 16, 16)
+step   = c(4, 15, 15, 15,  8,  8)
+lag    = c(2,  5,  5,  5,  2,  2)
+
+kable(data.frame(measure, window, step, lag), caption = "WLCC settings in seconds")
+
+```
+
+For each window, the maximum correlation value was chosen out of all relevant lags (peack-picking). We cross-correlated head movements (from OpenFace) with body motion energy time series (from MEA) to estimate intrapersonal synchrony. 
+
+##  `r ss = ss + 1`S`r s`.`r ss` Feature lists 
+
+This list shows all features without the information of conversation, i.e., each of these features was added twice to the model, once from the mealplanning and once from the hobbies conversation. The number of features per model is displayed as well. For many of the extracted features, we calculated summary scores some which are indicated by abbreviations (mean, md = median, sd = standard deviation, min = minimum, max = maximum, ske = skewness and kurtosis)
+
+```{r feats}
+
+# add the model to the feature list
+df.feat.m = df.lng %>%
+  filter(task == "mealplanning") %>%
+  mutate(
+    model = case_when(
+      grepl("_AU", feature) & !grepl("self|other", feature) ~ "FACEsync",
+      grepl("headsync|Rx|Ry|Rz", feature) ~ "HEADsync",
+      grepl("bodysync", feature) ~ "BODYsync",
+      grepl("intra", feature) ~ "INTRAsync",
+      grepl("movement|intensity", feature) ~ "MovEx",
+      grepl("speech", feature) ~ "Speech",
+      grepl("self_|other_", feature) ~ "CROSSturn",
+      grepl("_LOF|_ROF", feature) ~ "CROSSsync"
+    )
+  ) %>%
+  select(model, feature) %>% distinct() %>%
+  group_by(model) %>%
+  summarise(
+    features = paste(feature, collapse = ", "),
+    "no of features" = n() * 2
+  )
+
+kable(df.feat.m)
+
+```
+
+# `r s = s + 1`S`r s``r ss = 0` Model performance
+
+## `r ss = ss + 1`S`r s`.`r ss` Distinguishing BPD-involved from COMP interactions
+While developing an algorithm for technology-assisted diagnostics of BPD was not the explicit goal of this research project, we explored the application of our features to the classification between BPD-involved and COMP interactions. Despite the features being chosen with symptoms and characteristics of ASD in mind, the *CROSSturn*, *FACEsync*, *HEADsync* and *Speech* models performed above chance in this comparison (*BODYsync*: *p~FDR~* = `r round(df.nm[df.nm$model == "BODYsync" & df.nm$comparison == "BPD-COMP vs COMP-COMP",]$"p.fdr",3)`; *CROSSsync*: *p~FDR~* = `r round(df.nm[df.nm$model == "CROSSsync" & df.nm$comparison == "BPD-COMP vs COMP-COMP",]$"p.fdr",3)`; *INTRAsync*: *p~FDR~* = `r round(df.nm[df.nm$model == "INTRAsync" & df.nm$comparison == "BPD-COMP vs COMP-COMP",]$"p.fdr",3)`; *MovEx*: *p~FDR~* = `r round(df.nm[df.nm$model == "MovEx" & df.nm$comparison == "BPD-COMP vs COMP-COMP",]$"p.fdr",3)`). Specifically, the *HEADsync* model achieved `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "HEADsync",]$BAC,1)`% balanced accuracy (`r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "HEADsync",]$sens,1)`; `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "HEADsync",]$spec,1)`% specificity), the *FACEsync* `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "FACEsync",]$BAC,1)`% (`r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "FACEsync",]$sens,1)`; `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "HEADsync",]$spec,1)`% specificity), the *Speech* `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "Speech",]$BAC,1)`% (`r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "Speech",]$sens,1)`; `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "Speech",]$spec,1)`% specificity) and the *CROSSturn* `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "CROSSturn",]$BAC,1)`% (`r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "CROSSturn",]$sens,1)`; `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "CROSSturn",]$spec,1)`% specificity). The stacking model performed comparable to the *HEADsync* and the *MovEx* model but outperformed the other base models (see [!T]), reaching `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "STACK",]$BAC,1)`% balanced accuracy (`r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "STACK",]$sens,1)`; `r round(df.t[df.t$comparison == "BPD-COMP vs COMP-COMP" & df.t$model == "STACK",]$spec,1)`% specificity). Thus, the stacking model only misclassified `r int2words(sum(df.pred2$group == "BPD-involved, misclassified"))` BPD-involved interactions as COMP, but `r int2words(sum(df.pred2$group == "COMP, misclassified"))` COMP interactions were labelled as BPD-involved. 
+
+##  `r ss = ss + 1`S`r s`.`r ss` One-verus-One comparisons
+
+```{r tbl_ovo}
+
+kable(
+  merge(
+    df.t %>% select(comparison, model, sens, spec, BAC, AUC),
+    df.nm %>% select(comparison, model, "p.fdr")
+    ) %>%
+    mutate(
+      sig = if_else(`p.fdr` < 0.05, "*", "")
+    ),
+  digits = 3
+)
+
+```
+
+##  `r ss = ss + 1`S`r s`.`r ss` Multi-group comparisons
+
+```{r tbl_multi}
+
+kable(
+  df.nm %>% select(comparison, model, BAC, "p.fdr") %>% 
+    filter(comparison == "MultiGroup") %>%
+    mutate(
+      sig = if_else(p.fdr < 0.05, "*", "")
+    ),
+  digits = 3
+)
+
+```
+
+##  `r ss = ss + 1`S`r s`.`r ss` Gender comparisons
+
+Did the models perform better for one gender than the other? We perform unpaired Wilcoxon tests for the labels and models separately. 
+
+```{r aov_gen, fig.height=4, fig.width=9}
+
+# add gender to the prediction table
+df.sub.gen1 = merge(
+  df.lng %>% select(ID, label, gender) %>% distinct() %>% 
+    filter(label != "COMP") %>% mutate(Cases = row_number()), 
+  df.pred1) %>% 
+  mutate(
+    comp = "ASD- vs. BPD-inv"
+  ) %>% mutate_if(is.character, as.factor)
+df.sub.gen2 = merge(
+  df.lng %>% select(ID, label, gender) %>% distinct() %>% 
+    filter(label != "ASD-involved") %>% mutate(Cases = row_number()), 
+  df.pred2) %>% 
+  mutate(
+    comp = "BPD-inv vs. COMP"
+  ) %>% mutate_if(is.character, as.factor)
+df.sub.gen3 = merge(
+  df.lng %>% select(ID, label, gender) %>% distinct() %>% 
+    filter(label != "BPD-involved") %>% mutate(Cases = row_number()), 
+  df.pred3) %>% 
+  mutate(
+    comp = "ASD-inv vs. COMP"
+  ) %>% mutate_if(is.character, as.factor)
+
+df.gen = rbind(df.sub.gen1, df.sub.gen2, df.sub.gen3)
+
+# compute the p-values and perform FDR correction
+pwc = df.gen %>% 
+  group_by(comp, label) %>% #
+  wilcox_test(Mean_Score ~ gender) %>%
+  # perform FDR correction 
+  mutate(
+    p.fdr = p.adjust(p, method = "BY"),
+    p.label = sprintf("p = %.3f", p.fdr)
+  )
+
+# plot them 
+ggplot(df.gen, aes(x = label, y = Mean_Score)) + 
+  geom_boxplot(aes(fill = gender), alpha = 0.8, linewidth = 1, outlier.shape = NA) + 
+  labs (x = "", y = "SVM decision score", 
+        title = "Gender comparison for decision scores",
+        caption = "pwc: unpaired Wilcoxon test, FDR adjusted") + 
+  scale_fill_manual(values = custom.col4[c(1,6)]) +
+  stat_pvalue_manual(pwc, x = "label", y.position = 2.2, label = "p.label") +
+  theme_bw() + 
+  facet_wrap(. ~ comp, scales = "free_x") +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5), #element_blank(), 
+        legend.direction = "horizontal", text = element_text(size = 10),
+        legend.title = element_blank(), legend.margin=margin(t=-15))
+
+```
+
+# `r s = s + 1`S`r s``r ss = 0` Model visualisations
+
+The following figures were created inspired by NeuroMiner [@koutsouleris_neurominer_2024] visualisations and show the sign-based consistency [@gomez2019sign] as well as the feature weights of the models distinguishing between interaction partners from ASD- and BPD-involved interactions. For models with a large number of features, the top 16 features are plotted. 
+
+##  `r ss = ss + 1`S`r s`.`r ss` ASD-involved versus BPD-involved classifiers
+
+```{r plot_ASDvBPD, warning=F}
+
+for (i in 1:length(unique(df.feat$model))) {
+  p = df.feat %>% 
+    filter(model == unique(df.feat$model)[i] & comparison == "ASD-inv vs. BPD-inv") %>%
+    filter(!is.na(Mean_W_GM)) %>%
+    mutate(
+      direction = if_else(Mean_W_GM >= 0, "ASD-involved", "BPD-involved"),
+      Feature = fct_reorder(Feature, desc(abs(Mean_W_GM)))
+    ) %>% arrange(desc(abs(Mean_W_GM))) %>%
+    mutate(no = row_number()) %>%
+    filter(no <= 16) %>%
+    ggplot(., aes(x = Feature, y = Mean_W_GM, fill = direction, colour = direction)) +
+    geom_bar(, stat="identity", alpha=0.7) +
+      geom_errorbar( aes(x = Feature, 
+                         ymin = Mean_W_GM-StErr_W_GM, 
+                         ymax = Mean_W_GM+StErr_W_GM), 
+                     width=0.4, alpha=0.9, size=1.3) +
+    scale_color_manual(values = c(custom.col4[1], custom.col4[2])) + 
+    scale_fill_manual(values = c(custom.col4[1], custom.col4[2])) + 
+    labs(title = unique(df.feat$model)[i], x = "", y = "Feature weight (CV2)") + 
+    theme_bw() 
+  if (i == 1) {
+    p = p + 
+    theme(legend.position = c(0.2, 0.83), 
+          legend.title = element_blank(), text = element_text(size = 10),
+          legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid')
+          ) + coord_flip()
+  } else {
+    p = p + 
+    theme(legend.position = "none", text = element_text(size = 10),
+          legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid')
+          ) + coord_flip()
+  }
+  print(p)
+}
+
+
+for (i in 1:length(unique(df.feat$model))) {
+  p = df.feat %>% 
+    filter(model == unique(df.feat$model)[i] & comparison == "ASD-inv vs. BPD-inv") %>%
+    filter(!is.na(Z_SignConst)) %>%
+    mutate(
+      Feature = fct_reorder(Feature, desc(abs(Z_SignConst)))
+    ) %>% arrange(desc(abs(Z_SignConst))) %>%
+    mutate(no = row_number()) %>%
+    filter(no <= 16) %>%
+    ggplot(., aes(x = Feature, y = Z_SignConst)) +
+    geom_bar(, stat="identity", alpha = 0.7, fill = "skyblue") + 
+    labs(title = unique(df.feat$model)[i], x = "", y = "Sign-based consistency (CV2, z-transformed)") + 
+    theme_bw() + 
+    theme(legend.position = c(0.8, 0.83), 
+          legend.title = element_blank(), text = element_text(size = 10),
+          legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid')
+          ) + coord_flip()
+  print(p)
+}
+
+
+```
+
+
+##  `r ss = ss + 1`S`r s`.`r ss` ASD-involved versus COMP classifiers
+
+```{r plot_ASDvCOMP}
+
+for (i in 1:length(unique(df.feat$model))) {
+  p = df.feat %>% 
+    filter(model == unique(df.feat$model)[i] & comparison == "ASD-inv vs. COMP") %>%
+    filter(!is.na(Mean_W_GM)) %>%
+    mutate(
+      direction = if_else(Mean_W_GM >= 0, "ASD-involved", "COMP"),
+      Feature = fct_reorder(Feature, desc(abs(Mean_W_GM)))
+    ) %>% arrange(desc(abs(Mean_W_GM))) %>%
+    mutate(no = row_number()) %>%
+    filter(no <= 16) %>%
+    ggplot(., aes(x = Feature, y = Mean_W_GM, fill = direction, colour = direction)) +
+    geom_bar(, stat="identity", alpha=0.7) +
+      geom_errorbar( aes(x = Feature, 
+                         ymin = Mean_W_GM-StErr_W_GM, 
+                         ymax = Mean_W_GM+StErr_W_GM), 
+                     width=0.4, alpha=0.9, size=1.3) +
+    scale_color_manual(values = c(custom.col4[1], custom.col4[3])) + 
+    scale_fill_manual(values = c(custom.col4[1], custom.col4[3])) + 
+    labs(title = unique(df.feat$model)[i], x = "", y = "Feature weight (CV2)") + 
+    theme_bw()
+  if (i == 1) {
+    p = p + 
+    theme(legend.position = c(0.2, 0.83), 
+          legend.title = element_blank(), text = element_text(size = 10),
+          legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid')
+          ) + coord_flip()
+  } else {
+    p = p + 
+    theme(legend.position = "none", text = element_text(size = 10),
+          legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid')
+          ) + coord_flip()
+  }
+  print(p)
+}
+
+
+for (i in 1:length(unique(df.feat$model))) {
+  p = df.feat %>% 
+    filter(model == unique(df.feat$model)[i] & comparison == "ASD-inv vs. COMP") %>%
+    filter(!is.na(Z_SignConst)) %>%
+    mutate(
+      Feature = fct_reorder(Feature, desc(abs(Z_SignConst)))
+    ) %>% arrange(desc(abs(Z_SignConst))) %>%
+    mutate(no = row_number()) %>%
+    filter(no <= 16) %>%
+    ggplot(., aes(x = Feature, y = Z_SignConst)) +
+    geom_bar(, stat="identity", alpha = 0.7, fill = "skyblue") + 
+    labs(title = unique(df.feat$model)[i], x = "", y = "Sign-based consistency (CV2, z-transformed)") + 
+    theme_bw() + 
+    theme(legend.position = c(0.8, 0.83), 
+          legend.title = element_blank(), text = element_text(size = 10),
+          legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid')
+          ) + coord_flip()
+  print(p)
+}
+
+```
+
+
+##  `r ss = ss + 1`S`r s`.`r ss` ASD-involved versus COMP classifiers
+
+```{r plot_BPDvCOMP}
+
+for (i in 1:length(unique(df.feat$model))) {
+  p = df.feat %>% 
+    filter(model == unique(df.feat$model)[i] & comparison == "BPD-inv vs. COMP") %>%
+    filter(!is.na(Mean_W_GM)) %>%
+    mutate(
+      direction = if_else(Mean_W_GM >= 0, "BPD-involved", "COMP"),
+      Feature = fct_reorder(Feature, desc(abs(Mean_W_GM)))
+    ) %>% arrange(desc(abs(Mean_W_GM))) %>%
+    mutate(no = row_number()) %>%
+    filter(no <= 16) %>%
+    ggplot(., aes(x = Feature, y = Mean_W_GM, fill = direction, colour = direction)) +
+    geom_bar(, stat="identity", alpha=0.7) +
+      geom_errorbar( aes(x = Feature, 
+                         ymin = Mean_W_GM-StErr_W_GM, 
+                         ymax = Mean_W_GM+StErr_W_GM), 
+                     width=0.4, alpha=0.9, size=1.3) +
+    scale_color_manual(values = c(custom.col4[2], custom.col4[3])) + 
+    scale_fill_manual(values = c(custom.col4[2], custom.col4[3])) + 
+    labs(title = unique(df.feat$model)[i], x = "", y = "Feature weight (CV2)") + 
+    theme_bw() 
+  if (i == 1) {
+    p = p + 
+    theme(legend.position = c(0.2, 0.83), 
+          legend.title = element_blank(), text = element_text(size = 10),
+          legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid')
+          ) + coord_flip()
+  } else {
+    p = p + 
+    theme(legend.position = "none", text = element_text(size = 10),
+          legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid')
+          ) + coord_flip()
+  }
+  print(p)
+}
+
+
+for (i in 1:length(unique(df.feat$model))) {
+  p = df.feat %>% 
+    filter(model == unique(df.feat$model)[i] & comparison == "BPD-inv vs. COMP") %>%
+    filter(!is.na(Z_SignConst)) %>%
+    mutate(
+      Feature = fct_reorder(Feature, desc(abs(Z_SignConst)))
+    ) %>% arrange(desc(abs(Z_SignConst))) %>%
+    mutate(no = row_number()) %>%
+    filter(no <= 16) %>%
+    ggplot(., aes(x = Feature, y = Z_SignConst)) +
+    geom_bar(, stat="identity", alpha = 0.7, fill = "skyblue") + 
+    labs(title = unique(df.feat$model)[i], x = "", y = "Sign-based consistency (CV2, z-transformed)") + 
+    theme_bw() + 
+    theme(legend.position = c(0.8, 0.83), 
+          legend.title = element_blank(), text = element_text(size = 10),
+          legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid')
+          ) + coord_flip()
+  print(p)
+}
+
+```
+
+
+# `r s = s + 1`S`r s``r ss = 0` References
+
+<div id="refs"></div>
+

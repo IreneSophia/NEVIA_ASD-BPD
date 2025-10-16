@@ -1,0 +1,10 @@
+Row,BODYsync_Cl2,CROSSsync_Cl2,CROSSturn_Cl2,FACEsync_Cl2,HEADsync_Cl2,INTRAsync_Cl2,MovEx_Cl2,Speech_Cl2,STACK_Cl2
+BODYsync_Cl2,0,1,1,1,1,1,1,1,1
+CROSSsync_Cl2,1,0,0,0,1,0,1,0,1
+CROSSturn_Cl2,1,0,0,1,1,0,1,1,1
+FACEsync_Cl2,1,0,1,0,0,1,1,0,1
+HEADsync_Cl2,1,1,1,0,0,1,0,0,0
+INTRAsync_Cl2,1,0,0,1,1,0,1,1,1
+MovEx_Cl2,1,1,1,1,0,1,0,0,0
+Speech_Cl2,1,0,1,0,0,1,0,0,1
+STACK_Cl2,1,1,1,1,0,1,0,1,0
