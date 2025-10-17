@@ -1,0 +1,34 @@
+NM ANALYSIS LOG FILE
+====================
+Init date:			15-Jun-2025 11:31:10
+By user:			emba
+OS Type:			Linux
+OS Version:			6.8.0-60-generic
+OS Architecture:	amd64
+MATLAB version:		9.14.0.2489007 (R2023a) Update 6
+NM version:			Version 1.3 | CURUFIN [MATLAB (R2023a)]
+NM workspace ID:	739783_55154
+Analysis ID:		CROSSsync
+Analysis root dir:	/media/emba/emba-2/ML_BOKI/BOKI_scripts/ML_BPD-ASD/SVM_classifier/NM_ID739783_55154_A2_CROSSsync
+Analysis description:
+					default
+
+Analysis overview:
+==================
+ANALYSIS OPERATES ON MODALITY #2MODALITY 2 : MATLAB matrix [CROSSsync] 
+**************************************** 
+Preprocessing: 
+	* Group processing mode: binary 
+	* Step 1: Scale featurewise [ from -1 to 1 ], zero-out completely non-finite features 
+	* Step 2: Prune non-informative columns from matrix [ Zero Var, Nan, Inf ] 
+---------------------------------------- 
+Multi-group classification:
+	* Enabled, Multi-group optimization, Error-correcting output codes (Hamming distance)
+Machine Learning Method: 
+	* LIBLINEAR, L2-regularized L2-loss SVC (dual), Tolerance: 0.01, No Kernel
+No optimization of preprocessing parameters
+ML Optimization: 11 parameter combinations
+	(1) [ ML-Slack/Regularization parameter(s) => 11 Params: 0.015625 (first) -> 16 (last) ]
+Cross-Validation: 
+	* CV2: 10x10, CV1: 1x9
+
