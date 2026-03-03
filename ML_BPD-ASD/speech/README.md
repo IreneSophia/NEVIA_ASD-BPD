@@ -14,7 +14,7 @@ The scripts start with a number indicating the order of execution:
 
 0. This praat script separates audio channels. If the participants' audio is already saved in two separate files, this step can be skipped
 1. This praat script estimates pitch floor and ceiling
-2. This python script chooses one floor and ceiling per participant: since there are two conditions in this study, separate limits are extracted for both conditions. This script always chooses one per participant by taking the more extreme option.
+2. This python script chooses one floor and ceiling per participant: since there are two conditions in this study, separate limits are extracted for both conditions. This script always chooses one per participant by taking the more extreme option. (OPTIONAL)
 3. This praat script extracts:
 	- composite pitch and intensity information based on individual settings (Hirst, 2011)
 	- continuous pitch and intensity using the same parameters for all individuals
@@ -25,3 +25,7 @@ Between the third and the fouth script, the uhm-o-meter should be used to extrac
 5. This R script identifies turn-based information
 6. This R script computes synchrony values
 7. This R script merges all the available information to two dataframes, one on the dyad and one on the individual level
+
+## Example
+
+In the folder `testSample`, you can find a very short example audio clip and the output that is produced by running scripts 1 and 3. The sample only contains one audio channel; thus, step 1 is skipped. We also only provide one sample of this speaker, rendering step 2 unnecessary. We also extract the detected pitch segments for easy comparison with the praat extraction. However, since continuous pitch is focused on extracting the pitch from a specific timepoint, some differences are to be expected. 

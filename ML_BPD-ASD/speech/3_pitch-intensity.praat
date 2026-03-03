@@ -13,6 +13,7 @@
 # specify directory containing the data and the output
 # this file needs to contain "OUT_pitch_limits.csv"
 folder$ = "/home/emba/Documents/AUD_preprocessed/"
+folder$ = "~/Documents/NEVIA_ASD-BPD/ML_BPD-ASD/speech/testSample"
 # please enter the file separator from your OS
 filesep$ = "/" 
 

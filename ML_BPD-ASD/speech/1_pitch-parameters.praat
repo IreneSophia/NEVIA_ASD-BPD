@@ -12,7 +12,7 @@
 #### [!PARAMETERS TO ADJUST!] ####
 # specify directory containing the data and the output
 folder$ = "/media/emba/emba-2/ML_BOKI/AUD_preprocessed/"
-folder$ = "/home/emba/Documents/AUD_preprocessed"
+folder$ = "~/Documents/NEVIA_ASD-BPD/ML_BPD-ASD/speech/testSample"
 # please enter the file separator from your OS
 filesep$ = "/" 
 
@@ -39,7 +39,7 @@ clearinfo
 appendInfoLine: "finding pitch floor and ceiling"
 
 # print a single header line with column names
-writeFileLine: "'folder$'OUT_pitch_limits.csv", "filename,floor,ceiling"
+writeFileLine: "'folder$'OUT_pitch_limits.csv", "filename,floor,ceiling,floor_pp,ceiling_pp"
 
 # read files
 fls = Create Strings as file list... list 'folder$'*.wav
@@ -60,10 +60,12 @@ for ifile to numberOfFiles
     Remove
     floor = q1*0.75
     ceiling = q3*2.5
+    floor_pp = floor(floor)
+    ceiling_pp = ceiling(ceiling)
 
     removeObject: sound
 
-    appendFileLine: "'folder$'OUT_pitch_limits.csv", "'fileName$','floor','ceiling'"
+    appendFileLine: "'folder$'OUT_pitch_limits.csv", "'fileName$','floor','ceiling','floor_pp','ceiling_pp'"
 
 endfor
 
