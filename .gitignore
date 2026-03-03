@@ -3,3 +3,6 @@ BPD_sync/psychophysio/__pycache__/
 ML_BPD-ASD/SVM_classifier/NM_ID739783_55154_*/LIBLIN/*
 ML_BPD-ASD/SVM_classifier/NM_ID739783_55154_*/LIBSVM/*
 ML_BPD-ASD/SVM_classifier/NM_models-perm.mat
+.DS_Store
+*/.DS_Store
+*/*/DS_Store
